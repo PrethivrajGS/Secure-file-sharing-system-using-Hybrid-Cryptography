@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Key Generation — SFS</title>
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .pem-area { font-family: var(--font-mono); font-size: 0.75rem; min-height: 180px; line-height: 1.7; }
+    .pem-area.pubkey { color: var(--teal); }
+    .pem-area.privkey { color: #ff6b6b; }
+    .key-warning {
+      background: rgba(255,71,87,0.08); border: 1px solid var(--red-dim);
+      border-radius: var(--radius-md); padding: 12px 16px;
+      font-size: 0.8rem; color: var(--red); margin-top: 12px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .key-warning .warn-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .key-info-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .key-meta { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px 10px; }
+    .tab-row { display: flex; gap: 4px; margin-bottom: 0; }
+    .tab-btn {
+      font-family: var(--font-mono); font-size: 0.75rem;
+      padding: 7px 16px; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      cursor: pointer; background: var(--bg-panel); border: 1px solid var(--border);
+      border-bottom: none; color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .tab-btn.active { background: var(--bg-card); color: var(--amber); border-color: var(--border-hi); border-bottom-color: var(--bg-card); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-brand"><span class="lock-icon">🔐</span> SFS</a>
+    <div class="nav-links">
+      <a href="index.html"    class="nav-link">Dashboard</a>
+      <a href="keygen.html"   class="nav-link active">Key Gen</a>
+      <a href="send.html"     class="nav-link">Send File</a>
+      <a href="receive.html"  class="nav-link">Receive</a>
+      <a href="verify.html"   class="nav-link">Verify</a>
+      <a href="workflow.html" class="nav-link">Workflow</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container page-wrap">
+  <div class="page-header">
+    <div class="step-label">Step 01 — Setup</div>
+    <h1>🗝️ RSA Key Pair Generation</h1>
+    <p>Generate a 2048-bit RSA-OAEP key pair. Give your <strong style="color:var(--teal)">public key</strong> to anyone who wants to send you files. Keep your <strong style="color:var(--red)">private key</strong> secret — it's required to decrypt received files.</p>
+  </div>
+
+  <div class="grid-2">
+    <!-- Left: Generate -->
+    <div>
+      <div class="card">
+        <div class="card-title">// RSA Key Generation</div>
+
+        <div class="step-guide">
+          <div class="step-item">
+            <div class="step-num-badge">1</div>
+            <div class="step-content">
+              <h4>Click Generate</h4>
+              <p>Creates a 2048-bit RSA-OAEP key pair using the browser's secure random number generator.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">2</div>
+            <div class="step-content">
+              <h4>Copy Public Key</h4>
+              <p>Share this with anyone who will send you encrypted files. It is safe to share publicly.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">3</div>
+            <div class="step-content">
+              <h4>Save Private Key</h4>
+              <p>Store this somewhere safe. You will need it on the <code>receive.html</code> page to decrypt files.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="gen-btn" onclick="generateKeys()">
+            <span id="gen-spinner" style="display:none;" class="spinner"></span>
+            Generate RSA-2048 Key Pair
+          </button>
+        </div>
+        <div id="gen-status"></div>
+
+        <div class="key-info-row" id="key-meta" style="display:none;">
+          <span class="key-meta">Algorithm: RSA-OAEP</span>
+          <span class="key-meta">Key Size: 2048-bit</span>
+          <span class="key-meta">Hash: SHA-256</span>
+          <span class="key-meta">Public Exp: 65537</span>
+          <span class="key-meta">Format: SPKI / PKCS#8</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Quick How-It-Works -->
+    <div>
+      <div class="card">
+        <div class="card-title">// How RSA Key Wrapping Works</div>
+        <div class="step-guide">
+          <div class="step-item">
+            <div class="step-num-badge">A</div>
+            <div class="step-content">
+              <h4>Public Key → Encrypt</h4>
+              <p>The sender uses your public key to encrypt (wrap) the AES session key. Only your private key can unwrap it.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">B</div>
+            <div class="step-content">
+              <h4>Private Key → Decrypt</h4>
+              <p>You use your private key to recover the AES key, then use that to decrypt the actual file.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">C</div>
+            <div class="step-content">
+              <h4>Why Not Encrypt File with RSA?</h4>
+              <p>RSA can only encrypt small data (~190 bytes). So we use AES for the file and RSA only for the small AES key — this is called <code>hybrid encryption</code>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Output -->
+  <div class="card" id="key-output-card" style="display:none; margin-top:16px;" class="animate-in">
+    <div class="card-title">// Generated Key Pair — <span id="gen-timestamp" style="color:var(--text-muted);"></span></div>
+
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('pub')">🔵 Public Key (share this)</button>
+      <button class="tab-btn" onclick="switchTab('priv')">🔴 Private Key (keep secret)</button>
+    </div>
+
+    <div class="card" style="border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md); border-top: none; margin-top: 0;">
+      <div id="tab-pub" class="tab-panel active">
+        <p style="margin-bottom:10px; font-size:0.8rem;">Share this with the file <strong>sender</strong>. It is safe to distribute.</p>
+        <textarea id="pub-pem" class="pem-area pubkey" readonly></textarea>
+        <div class="btn-row">
+          <button class="btn btn-teal btn-sm" onclick="copyPem('pub-pem', this)">Copy Public Key</button>
+          <button class="btn btn-secondary btn-sm" onclick="downloadPem('pub-pem', 'public_key.pem')">Download .pem</button>
+        </div>
+      </div>
+      <div id="tab-priv" class="tab-panel">
+        <div class="key-warning">
+          <span class="warn-icon">⚠️</span>
+          <span>This is your <strong>private key</strong>. Never share it. Store it securely. Anyone with this key can decrypt your files. It is not saved anywhere by this application.</span>
+        </div>
+        <textarea id="priv-pem" class="pem-area privkey" style="margin-top:12px;" readonly></textarea>
+        <div class="btn-row">
+          <button class="btn btn-danger btn-sm" onclick="copyPem('priv-pem', this)">Copy Private Key</button>
+          <button class="btn btn-secondary btn-sm" onclick="downloadPem('priv-pem', 'private_key_SECRET.pem')">Download .pem</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:24px; text-align:right;">
+    <a href="send.html" class="btn btn-primary">Next: Encrypt a File →</a>
+  </div>
+</div>
+
+<script src="crypto-engine.js"></script>
+<script>
+  async function generateKeys() {
+    const btn = document.getElementById('gen-btn');
+    document.getElementById('gen-spinner').style.display = 'inline-block';
+    btn.disabled = true;
+    setStatus('gen-status', '⏳ Generating RSA-2048 key pair…', 'info');
+
+    try {
+      const kp = await CryptoEngine.generateRSAKeyPair();
+      document.getElementById('pub-pem').value  = kp.publicPem;
+      document.getElementById('priv-pem').value = kp.privatePem;
+      document.getElementById('key-output-card').style.display = 'block';
+      document.getElementById('key-meta').style.display = 'flex';
+      document.getElementById('gen-timestamp').textContent = new Date().toLocaleString();
+      setStatus('gen-status', '✓ RSA-2048 key pair generated successfully — keys are only stored in this browser session', 'success');
+    } catch(e) {
+      setStatus('gen-status', '✗ Error: ' + e.message, 'error');
+    } finally {
+      document.getElementById('gen-spinner').style.display = 'none';
+      btn.disabled = false;
+    }
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', (i === (tab === 'pub' ? 0 : 1))));
+    document.getElementById('tab-pub').classList.toggle('active', tab === 'pub');
+    document.getElementById('tab-priv').classList.toggle('active', tab === 'priv');
+  }
+
+  function copyPem(id, btn) {
+    navigator.clipboard.writeText(document.getElementById(id).value);
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = orig, 1800);
+  }
+
+  function downloadPem(id, filename) {
+    const content = document.getElementById(id).value;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function setStatus(id, msg, type) {
+    const map = { success: 'alert-success', error: 'alert-error', info: 'alert-info', warn: 'alert-warn' };
+    document.getElementById(id).innerHTML = `<div class="alert ${map[type] || 'alert-info'}">${msg}</div>`;
+  }
+</script>
+</body>
+</html>

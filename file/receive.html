@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receive File — SFS</title>
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .integrity-banner {
+      border-radius: var(--radius-md); padding: 16px 20px;
+      display: flex; align-items: center; gap: 14px;
+      margin-top: 16px; font-family: var(--font-mono);
+    }
+    .integrity-banner.ok  { background: var(--green-dim); border: 1px solid var(--green); }
+    .integrity-banner.bad { background: var(--red-dim);   border: 1px solid var(--red); }
+    .ib-icon { font-size: 2rem; flex-shrink: 0; }
+    .ib-title { font-size: 0.9rem; font-weight: 600; }
+    .ib-desc  { font-size: 0.78rem; margin-top: 3px; }
+    .integrity-banner.ok  .ib-title, .integrity-banner.ok  .ib-desc { color: var(--green); }
+    .integrity-banner.bad .ib-title, .integrity-banner.bad .ib-desc { color: var(--red); }
+
+    .hash-compare { margin-top: 14px; }
+    .hc-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+    .hc-label { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); width: 90px; flex-shrink: 0; padding-top: 4px; }
+    .hc-val { font-family: var(--font-mono); font-size: 0.7rem; color: var(--teal); word-break: break-all; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; flex: 1; }
+    .hc-val.mismatch { color: var(--red); border-color: var(--red-dim); }
+
+    .bundle-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+    .bm-item { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; }
+    .bm-label { font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-muted); }
+    .bm-val   { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-primary); margin-top: 2px; }
+
+    .drop-zone-bundle {
+      border: 2px dashed var(--border-hi);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      cursor: pointer; transition: all 0.2s;
+      text-align: center; background: var(--bg-input);
+      position: relative;
+    }
+    .drop-zone-bundle input {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+      width: 100%; height: 100%; padding: 0;
+    }
+    .drop-zone-bundle:hover { border-color: var(--teal); background: rgba(0,212,170,0.03); }
+    .drop-zone-bundle.has-file { border-style: solid; border-color: var(--teal); }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-brand"><span class="lock-icon">🔐</span> SFS</a>
+    <div class="nav-links">
+      <a href="index.html"    class="nav-link">Dashboard</a>
+      <a href="keygen.html"   class="nav-link">Key Gen</a>
+      <a href="send.html"     class="nav-link">Send File</a>
+      <a href="receive.html"  class="nav-link active">Receive</a>
+      <a href="verify.html"   class="nav-link">Verify</a>
+      <a href="workflow.html" class="nav-link">Workflow</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container page-wrap">
+  <div class="page-header">
+    <div class="step-label">Step 03 — Recipient</div>
+    <h1>📥 Decrypt &amp; Receive File</h1>
+    <p>Paste the secure bundle and your RSA private key. The system will unwrap the AES key, decrypt the file, and verify the SHA-512 integrity hash automatically.</p>
+  </div>
+
+  <div class="grid-2">
+    <!-- Left: Inputs -->
+    <div>
+      <div class="card">
+        <div class="card-title">// 1. Load Secure Bundle</div>
+
+        <div class="drop-zone-bundle" id="bundle-drop">
+          <input type="file" accept=".json" onchange="loadBundleFile(this.files[0])">
+          <div style="font-size:1.5rem; margin-bottom:8px;">📦</div>
+          <div style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-secondary);">Drop bundle .json or click to browse</div>
+        </div>
+
+        <p style="text-align:center; font-size:0.75rem; color:var(--text-muted); margin: 8px 0;">— or paste JSON directly —</p>
+
+        <textarea id="bundle-input"
+          placeholder='{"version":"SFS-v1.0","algorithm":"SHA-512 + AES-GCM-256 + RSA-OAEP-2048","wrappedKeyB64":"...","ivB64":"...","encryptedB64":"...","sha512hex":"..."}'
+          style="min-height:120px; font-size:0.7rem;"
+          oninput="parseBundleMeta()"></textarea>
+
+        <div id="bundle-meta-display" style="display:none;">
+          <div class="bundle-meta" id="bundle-meta"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">// 2. Your RSA Private Key</div>
+        <div class="alert alert-warn" style="margin-bottom:12px;">
+          ⚠ Your private key is used locally and never transmitted. It stays in your browser only.
+        </div>
+        <textarea id="priv-key-input"
+          placeholder="-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASC...
+-----END PRIVATE KEY-----"
+          style="min-height:140px; font-size:0.72rem; color: #ff6b6b;"></textarea>
+      </div>
+    </div>
+
+    <!-- Right: Decrypt + Result -->
+    <div>
+      <div class="card">
+        <div class="card-title">// 3. Decryption Process</div>
+
+        <div class="step-guide">
+          <div class="step-item">
+            <div class="step-num-badge">①</div>
+            <div class="step-content">
+              <h4>RSA Unwrap</h4>
+              <p>Your RSA-2048 private key decrypts the wrapped AES session key stored in the bundle. This is the reverse of the sender's RSA-OAEP encryption.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">②</div>
+            <div class="step-content">
+              <h4>AES-GCM Decrypt</h4>
+              <p>The recovered 256-bit AES key and bundle IV are used to decrypt the file bytes. AES-GCM also verifies the 128-bit authentication tag — if the bundle was tampered, this fails.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">③</div>
+            <div class="step-content">
+              <h4>SHA-512 Verify</h4>
+              <p>SHA-512 is recomputed over the decrypted bytes and compared against the hash embedded in the bundle. Match = file is intact and unmodified.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-teal" id="decrypt-btn" onclick="decryptBundle()">
+            <span id="dec-spinner" style="display:none;" class="spinner"></span>
+            🔓 Decrypt File
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="clearAll()">Clear</button>
+        </div>
+        <div id="dec-status"></div>
+      </div>
+
+      <!-- Result -->
+      <div class="card" id="result-card" style="display:none; margin-top:16px;">
+        <div class="card-title">// Decryption Result</div>
+
+        <div class="integrity-banner" id="integrity-banner">
+          <div class="ib-icon" id="ib-icon">—</div>
+          <div>
+            <div class="ib-title" id="ib-title">—</div>
+            <div class="ib-desc"  id="ib-desc">—</div>
+          </div>
+        </div>
+
+        <div class="hash-compare" id="hash-compare">
+          <div class="hc-row">
+            <span class="hc-label">Original SHA-512</span>
+            <span class="hc-val" id="hc-original">—</span>
+          </div>
+          <div class="hc-row">
+            <span class="hc-label">Computed SHA-512</span>
+            <span class="hc-val" id="hc-computed">—</span>
+          </div>
+        </div>
+
+        <div class="btn-row" id="download-row" style="display:none;">
+          <button class="btn btn-primary" onclick="downloadDecrypted()">⬇ Download Decrypted File</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="crypto-engine.js"></script>
+<script>
+  let decryptedResult = null;
+
+  function loadBundleFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('bundle-input').value = e.target.result;
+      document.getElementById('bundle-drop').classList.add('has-file');
+      parseBundleMeta();
+    };
+    reader.readAsText(file);
+  }
+
+  function parseBundleMeta() {
+    try {
+      const bundle = JSON.parse(document.getElementById('bundle-input').value.trim());
+      const display = document.getElementById('bundle-meta-display');
+      display.style.display = 'block';
+      document.getElementById('bundle-meta').innerHTML = `
+        <div class="bm-item"><div class="bm-label">File Name</div><div class="bm-val">${bundle.fileName || '—'}</div></div>
+        <div class="bm-item"><div class="bm-label">File Size</div><div class="bm-val">${bundle.fileSize ? formatSize(bundle.fileSize) : '—'}</div></div>
+        <div class="bm-item"><div class="bm-label">Algorithm</div><div class="bm-val" style="font-size:0.65rem;">${bundle.algorithm || '—'}</div></div>
+        <div class="bm-item"><div class="bm-label">Encrypted At</div><div class="bm-val" style="font-size:0.7rem;">${bundle.timestamp ? new Date(bundle.timestamp).toLocaleString() : '—'}</div></div>
+      `;
+    } catch(e) {
+      document.getElementById('bundle-meta-display').style.display = 'none';
+    }
+  }
+
+  async function decryptBundle() {
+    const bundleText  = document.getElementById('bundle-input').value.trim();
+    const privKeyPem  = document.getElementById('priv-key-input').value.trim();
+    if (!bundleText)  { setStatus('dec-status', '✗ Paste or load a secure bundle.', 'error'); return; }
+    if (!privKeyPem)  { setStatus('dec-status', '✗ Paste your RSA private key.', 'error'); return; }
+
+    const btn = document.getElementById('decrypt-btn');
+    document.getElementById('dec-spinner').style.display = 'inline-block';
+    btn.disabled = true;
+    document.getElementById('result-card').style.display = 'none';
+
+    try {
+      setStatus('dec-status', '⏳ Step 1/3 — Unwrapping AES key with RSA private key…', 'info');
+      await delay(80);
+      setStatus('dec-status', '⏳ Step 2/3 — Decrypting file with AES-GCM-256…', 'info');
+      await delay(80);
+      setStatus('dec-status', '⏳ Step 3/3 — Verifying SHA-512 integrity…', 'info');
+
+      const result = await CryptoEngine.openSecureBundle(bundleText, privKeyPem);
+      decryptedResult = result;
+
+      // Show result card
+      document.getElementById('result-card').style.display = 'block';
+
+      // Integrity banner
+      const banner = document.getElementById('integrity-banner');
+      if (result.integrityOk) {
+        banner.className = 'integrity-banner ok';
+        document.getElementById('ib-icon').textContent  = '✅';
+        document.getElementById('ib-title').textContent = 'Integrity Verified — File is Authentic';
+        document.getElementById('ib-desc').textContent  = 'SHA-512 digest matches exactly. The file was not tampered with in transit.';
+      } else {
+        banner.className = 'integrity-banner bad';
+        document.getElementById('ib-icon').textContent  = '❌';
+        document.getElementById('ib-title').textContent = 'Integrity FAILED — File May Be Tampered';
+        document.getElementById('ib-desc').textContent  = 'SHA-512 digest does NOT match. The file may have been modified after encryption.';
+      }
+
+      // Hash comparison
+      document.getElementById('hc-original').textContent = result.originalHash;
+      document.getElementById('hc-computed').textContent = result.sha512hex;
+      document.getElementById('hc-original').className = 'hc-val';
+      document.getElementById('hc-computed').className = 'hc-val' + (result.integrityOk ? '' : ' mismatch');
+
+      // Download button
+      document.getElementById('download-row').style.display = 'flex';
+
+      setStatus('dec-status', `✓ Decrypted "${result.fileName}" — SHA-512 integrity: ${result.integrityOk ? 'PASSED ✓' : 'FAILED ✗'}`, result.integrityOk ? 'success' : 'warn');
+    } catch(e) {
+      setStatus('dec-status', '✗ Decryption failed: ' + e.message + ' — Check that the private key matches the public key used to encrypt.', 'error');
+    } finally {
+      document.getElementById('dec-spinner').style.display = 'none';
+      btn.disabled = false;
+    }
+  }
+
+  function downloadDecrypted() {
+    if (!decryptedResult) return;
+    const blob = new Blob([decryptedResult.fileBytes], { type: decryptedResult.fileType });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = decryptedResult.fileName; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function clearAll() {
+    ['bundle-input','priv-key-input'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('result-card').style.display = 'none';
+    document.getElementById('bundle-meta-display').style.display = 'none';
+    document.getElementById('bundle-drop').classList.remove('has-file');
+    document.getElementById('dec-status').innerHTML = '';
+    decryptedResult = null;
+  }
+
+  function setStatus(id, msg, type) {
+    const map = { success:'alert-success', error:'alert-error', info:'alert-info', warn:'alert-warn' };
+    document.getElementById(id).innerHTML = `<div class="alert ${map[type]||'alert-info'}">${msg}</div>`;
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(2) + ' MB';
+  }
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

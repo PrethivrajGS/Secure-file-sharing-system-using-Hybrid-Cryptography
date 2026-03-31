@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Full Workflow — SFS</title>
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .workflow-timeline { position: relative; padding-left: 32px; }
+    .workflow-timeline::before {
+      content: ''; position: absolute; left: 10px; top: 0; bottom: 0;
+      width: 1px; background: var(--border);
+    }
+    .wf-block {
+      position: relative; margin-bottom: 32px;
+    }
+    .wf-dot {
+      position: absolute; left: -28px; top: 2px;
+      width: 18px; height: 18px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.6rem; font-weight: bold;
+      border: 2px solid;
+    }
+    .wf-dot.sha   { background: rgba(0,212,170,0.15);  border-color: var(--teal);  color: var(--teal);  }
+    .wf-dot.aes   { background: rgba(240,165,0,0.15);  border-color: var(--amber); color: var(--amber); }
+    .wf-dot.rsa   { background: rgba(61,155,255,0.12); border-color: var(--blue);  color: var(--blue);  }
+    .wf-dot.ok    { background: rgba(46,204,113,0.15); border-color: var(--green); color: var(--green); }
+    .wf-dot.gray  { background: rgba(100,120,140,0.15);border-color: #4a5a6b;     color: #7a8fa0;      }
+
+    .wf-block h3 { font-size: 0.95rem; margin-bottom: 6px; }
+    .wf-block .wf-algo-tag {
+      display: inline-block; font-family: var(--font-mono); font-size: 0.68rem;
+      padding: 2px 10px; border-radius: 999px; border: 1px solid;
+      margin-bottom: 10px; margin-right: 6px;
+    }
+    .wf-block .wf-algo-tag.sha   { border-color: var(--teal-dim);  color: var(--teal);  background: rgba(0,212,170,0.07); }
+    .wf-block .wf-algo-tag.aes   { border-color: var(--amber-dim); color: var(--amber); background: rgba(240,165,0,0.07); }
+    .wf-block .wf-algo-tag.rsa   { border-color: #1e3a5a;         color: var(--blue);  background: rgba(61,155,255,0.06); }
+
+    .code-block {
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px;
+      font-family: var(--font-mono); font-size: 0.75rem; color: var(--teal);
+      line-height: 1.8; overflow-x: auto; margin-top: 10px; white-space: pre;
+    }
+    .code-block .c-comment { color: var(--text-muted); }
+    .code-block .c-fn      { color: var(--amber); }
+    .code-block .c-kw      { color: #c792ea; }
+    .code-block .c-str     { color: #a5f3a5; }
+    .code-block .c-num     { color: #f78c6c; }
+
+    table.algo-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 12px; }
+    .algo-table th { background: var(--bg-input); padding: 10px 14px; text-align: left; color: var(--text-primary); border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.75rem; }
+    .algo-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text-secondary); vertical-align: top; }
+    .algo-table td:first-child { color: var(--amber); font-family: var(--font-mono); }
+    .algo-table tr:last-child td { border-bottom: none; }
+
+    .bundle-schema {
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px;
+      font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.9;
+    }
+    .bs-key   { color: var(--amber); }
+    .bs-val   { color: var(--teal); }
+    .bs-note  { color: var(--text-muted); }
+    .bs-type  { color: #c792ea; }
+
+    .section-header { margin-top: 48px; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .section-header h2 { margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-brand"><span class="lock-icon">🔐</span> SFS</a>
+    <div class="nav-links">
+      <a href="index.html"    class="nav-link">Dashboard</a>
+      <a href="keygen.html"   class="nav-link">Key Gen</a>
+      <a href="send.html"     class="nav-link">Send File</a>
+      <a href="receive.html"  class="nav-link">Receive</a>
+      <a href="verify.html"   class="nav-link">Verify</a>
+      <a href="workflow.html" class="nav-link active">Workflow</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container page-wrap">
+
+  <div class="page-header">
+    <div class="step-label">Documentation</div>
+    <h1>📋 Detailed Workflow &amp; Technical Reference</h1>
+    <p>Complete step-by-step technical documentation of how the Secure File Sharing System works — from key generation to file integrity verification.</p>
+  </div>
+
+  <!-- OVERVIEW TABLE -->
+  <div class="card">
+    <div class="card-title">// Algorithm Overview</div>
+    <table class="algo-table">
+      <tr>
+        <th>Algorithm</th><th>Role</th><th>Key / Output Size</th><th>Security Goal</th><th>Why This Choice</th>
+      </tr>
+      <tr>
+        <td>SHA-512</td>
+        <td>File integrity fingerprint</td>
+        <td>512-bit hash (128 hex chars)</td>
+        <td>Integrity detection</td>
+        <td>Strongest SHA-2 variant. 2^512 collision space. No known practical attacks.</td>
+      </tr>
+      <tr>
+        <td>AES-GCM-256</td>
+        <td>File encryption (bulk data)</td>
+        <td>256-bit key · 96-bit IV · 128-bit auth tag</td>
+        <td>Confidentiality + Authenticity</td>
+        <td>Authenticated encryption. Fast, hardware-accelerated. GCM mode provides built-in tamper detection.</td>
+      </tr>
+      <tr>
+        <td>RSA-OAEP-2048</td>
+        <td>AES key wrapping</td>
+        <td>2048-bit modulus · SHA-256 hash</td>
+        <td>Asymmetric key exchange</td>
+        <td>Enables sender to encrypt to a public key without a shared secret. OAEP padding is semantically secure.</td>
+      </tr>
+      <tr>
+        <td>PBKDF2 / Random</td>
+        <td>IV and salt generation</td>
+        <td>96-bit IV · 128-bit salt</td>
+        <td>Semantic security</td>
+        <td>Ensures identical plaintext files produce different ciphertext on every encryption.</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- SENDER WORKFLOW -->
+  <div class="section-header">
+    <h2>📤 Sender Workflow — Step by Step</h2>
+    <p>What happens when you click "Encrypt File" on the send page:</p>
+  </div>
+
+  <div class="workflow-timeline">
+
+    <div class="wf-block">
+      <div class="wf-dot sha">H</div>
+      <h3>Step 1 — SHA-512 Hash of Original File</h3>
+      <span class="wf-algo-tag sha">SHA-512</span>
+      <p>Read all bytes of the file into memory. Pass them through the SHA-512 hash function to produce a 512-bit (64-byte) message digest. This digest acts as a fingerprint — any change to even one bit of the file will produce a completely different hash (avalanche effect). The hex string is stored in the bundle.</p>
+      <div class="code-block"><span class="c-comment">// Step 1: Hash original file</span>
+<span class="c-kw">const</span> fileBuf   = <span class="c-kw">await</span> file.<span class="c-fn">arrayBuffer</span>();
+<span class="c-kw">const</span> hashBuf   = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">digest</span>(<span class="c-str">"SHA-512"</span>, fileBuf);
+<span class="c-kw">const</span> sha512hex = <span class="c-fn">bufToHex</span>(hashBuf);
+<span class="c-comment">// → 128-character hex string (512 bits)</span></div>
+    </div>
+
+    <div class="wf-block">
+      <div class="wf-dot aes">G</div>
+      <h3>Step 2 — Generate Fresh AES-256 Session Key</h3>
+      <span class="wf-algo-tag aes">AES-GCM-256</span>
+      <p>A brand-new 256-bit AES key, a 96-bit IV (Initialization Vector), and a 128-bit salt are generated using the browser's cryptographically secure random number generator. These are unique for every encryption operation — identical files encrypted twice will produce completely different ciphertext.</p>
+      <div class="code-block"><span class="c-comment">// Step 2: Generate fresh AES-256 key + random IV + salt</span>
+<span class="c-kw">const</span> aesKey = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">generateKey</span>(
+  { name: <span class="c-str">"AES-GCM"</span>, length: <span class="c-num">256</span> }, <span class="c-kw">true</span>, [<span class="c-str">"encrypt"</span>, <span class="c-str">"decrypt"</span>]
+);
+<span class="c-kw">const</span> iv   = crypto.<span class="c-fn">getRandomValues</span>(<span class="c-kw">new</span> Uint8Array(<span class="c-num">12</span>));  <span class="c-comment">// 96-bit IV</span>
+<span class="c-kw">const</span> salt = crypto.<span class="c-fn">getRandomValues</span>(<span class="c-kw">new</span> Uint8Array(<span class="c-num">16</span>));  <span class="c-comment">// 128-bit salt</span></div>
+    </div>
+
+    <div class="wf-block">
+      <div class="wf-dot aes">E</div>
+      <h3>Step 3 — AES-GCM-256 File Encryption</h3>
+      <span class="wf-algo-tag aes">AES-GCM-256</span>
+      <p>The file bytes are encrypted using AES in Galois/Counter Mode (GCM). GCM is an <em>authenticated encryption</em> mode — it both encrypts the data AND appends a 128-bit authentication tag. If even one byte of the ciphertext is modified, decryption will fail with an authentication error, preventing any tampering from going undetected.</p>
+      <div class="code-block"><span class="c-comment">// Step 3: Encrypt file with AES-GCM-256</span>
+<span class="c-kw">const</span> ciphertext = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">encrypt</span>(
+  { name: <span class="c-str">"AES-GCM"</span>, iv },  <span class="c-comment">// GCM appends 128-bit auth tag automatically</span>
+  aesKey,
+  fileBuf
+);
+<span class="c-comment">// ciphertext = encrypted bytes + 16-byte authentication tag</span>
+<span class="c-kw">const</span> encryptedB64 = <span class="c-fn">bufToB64</span>(ciphertext);</div>
+    </div>
+
+    <div class="wf-block">
+      <div class="wf-dot rsa">W</div>
+      <h3>Step 4 — RSA-OAEP Wrap the AES Key</h3>
+      <span class="wf-algo-tag rsa">RSA-OAEP-2048</span>
+      <p>The 256-bit (32-byte) AES session key is encrypted using the recipient's RSA-2048 public key with OAEP padding. Only the holder of the corresponding RSA private key can recover the AES key. The plaintext AES key is never stored in the bundle — only the RSA-encrypted version.</p>
+      <div class="code-block"><span class="c-comment">// Step 4: Wrap AES key with recipient's RSA-2048 public key</span>
+<span class="c-kw">const</span> rawAESKey    = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">exportKey</span>(<span class="c-str">"raw"</span>, aesKey);
+<span class="c-kw">const</span> wrappedKey   = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">encrypt</span>(
+  { name: <span class="c-str">"RSA-OAEP"</span> },
+  recipientPublicKey,  <span class="c-comment">// recipient's 2048-bit RSA public key</span>
+  rawAESKey            <span class="c-comment">// 32 bytes of AES key material</span>
+);
+<span class="c-kw">const</span> wrappedKeyB64 = <span class="c-fn">bufToB64</span>(wrappedKey);
+<span class="c-comment">// wrappedKey = 256-byte RSA ciphertext (RSA-2048 output size)</span></div>
+    </div>
+
+    <div class="wf-block">
+      <div class="wf-dot gray">B</div>
+      <h3>Step 5 — Assemble the Secure Bundle</h3>
+      <p>All components are combined into a self-contained JSON envelope. This bundle can be safely shared over any channel — email, chat, cloud storage. Without the recipient's private key, the contents are unreadable.</p>
+      <div class="bundle-schema">{
+  <span class="bs-key">"version"</span>:       <span class="bs-val">"SFS-v1.0"</span>,
+  <span class="bs-key">"algorithm"</span>:     <span class="bs-val">"SHA-512 + AES-GCM-256 + RSA-OAEP-2048"</span>,
+  <span class="bs-key">"wrappedKeyB64"</span>: <span class="bs-val">"&lt;RSA-encrypted AES key, Base64&gt;"</span>,   <span class="bs-note">← 256 bytes (RSA-2048 output)</span>
+  <span class="bs-key">"ivB64"</span>:         <span class="bs-val">"&lt;random 96-bit IV, Base64&gt;"</span>,         <span class="bs-note">← 12 bytes</span>
+  <span class="bs-key">"saltB64"</span>:       <span class="bs-val">"&lt;random 128-bit salt, Base64&gt;"</span>,       <span class="bs-note">← 16 bytes</span>
+  <span class="bs-key">"encryptedB64"</span>:  <span class="bs-val">"&lt;AES-GCM ciphertext, Base64&gt;"</span>,       <span class="bs-note">← file + 16-byte auth tag</span>
+  <span class="bs-key">"sha512hex"</span>:     <span class="bs-val">"&lt;128-char hex SHA-512 of original file&gt;"</span>,
+  <span class="bs-key">"fileName"</span>:      <span class="bs-val">"document.pdf"</span>,
+  <span class="bs-key">"fileType"</span>:      <span class="bs-val">"application/pdf"</span>,
+  <span class="bs-key">"fileSize"</span>:      <span class="bs-type">1048576</span>,
+  <span class="bs-key">"timestamp"</span>:     <span class="bs-val">"2026-03-25T10:00:00.000Z"</span>
+  <span class="bs-note">// NOTE: plaintext AES key is NOT stored here</span>
+}</div>
+    </div>
+  </div>
+
+  <!-- RECEIVER WORKFLOW -->
+  <div class="section-header">
+    <h2>📥 Receiver Workflow — Step by Step</h2>
+    <p>What happens when you click "Decrypt File" on the receive page:</p>
+  </div>
+
+  <div class="workflow-timeline">
+    <div class="wf-block">
+      <div class="wf-dot rsa">U</div>
+      <h3>Step 1 — RSA-OAEP Unwrap the AES Key</h3>
+      <span class="wf-algo-tag rsa">RSA-OAEP-2048</span>
+      <p>The recipient's RSA-2048 private key is used to decrypt the <code>wrappedKeyB64</code> field in the bundle, recovering the original 256-bit AES session key. This is the asymmetric step that makes secure key exchange possible without a pre-shared secret.</p>
+      <div class="code-block"><span class="c-comment">// Step 1: Unwrap AES key with RSA private key</span>
+<span class="c-kw">const</span> rawAESKey = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">decrypt</span>(
+  { name: <span class="c-str">"RSA-OAEP"</span> },
+  recipientPrivateKey,           <span class="c-comment">// 2048-bit RSA private key</span>
+  <span class="c-fn">b64ToBuf</span>(bundle.wrappedKeyB64) <span class="c-comment">// RSA-encrypted AES key from bundle</span>
+);
+<span class="c-comment">// rawAESKey = 32 bytes = original AES-256 session key</span></div>
+    </div>
+
+    <div class="wf-block">
+      <div class="wf-dot aes">D</div>
+      <h3>Step 2 — AES-GCM Decrypt the File</h3>
+      <span class="wf-algo-tag aes">AES-GCM-256</span>
+      <p>The recovered AES key and the IV from the bundle are used to decrypt the encrypted file bytes. AES-GCM automatically verifies the 128-bit authentication tag during decryption — if the ciphertext was modified in any way, decryption throws an error and no output is produced.</p>
+      <div class="code-block"><span class="c-comment">// Step 2: Decrypt file with recovered AES key</span>
+<span class="c-kw">const</span> aesKey = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">importKey</span>(
+  <span class="c-str">"raw"</span>, rawAESKey, { name: <span class="c-str">"AES-GCM"</span> }, <span class="c-kw">false</span>, [<span class="c-str">"decrypt"</span>]
+);
+<span class="c-kw">const</span> decrypted = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">decrypt</span>(
+  { name: <span class="c-str">"AES-GCM"</span>, iv: <span class="c-fn">b64ToBuf</span>(bundle.ivB64) },
+  aesKey,
+  <span class="c-fn">b64ToBuf</span>(bundle.encryptedB64)
+);
+<span class="c-comment">// GCM verifies auth tag — throws if ciphertext tampered</span></div>
+    </div>
+
+    <div class="wf-block">
+      <div class="wf-dot sha">V</div>
+      <h3>Step 3 — SHA-512 Integrity Verification</h3>
+      <span class="wf-algo-tag sha">SHA-512</span>
+      <p>SHA-512 is recomputed over the decrypted file bytes and compared byte-by-byte against the <code>sha512hex</code> field stored in the bundle. If they match, the file is provably identical to what the sender encrypted. Even a single bit change in the file during transit will produce a completely different hash, revealing any tampering.</p>
+      <div class="code-block"><span class="c-comment">// Step 3: Recompute SHA-512 and compare</span>
+<span class="c-kw">const</span> recomputedHash = <span class="c-kw">await</span> crypto.subtle.<span class="c-fn">digest</span>(<span class="c-str">"SHA-512"</span>, decrypted);
+<span class="c-kw">const</span> recomputedHex  = <span class="c-fn">bufToHex</span>(recomputedHash);
+
+<span class="c-kw">const</span> integrityOk = recomputedHex === bundle.sha512hex;
+<span class="c-comment">// integrityOk = true  → file is authentic and unmodified</span>
+<span class="c-comment">// integrityOk = false → file was corrupted or tampered</span></div>
+    </div>
+
+    <div class="wf-block">
+      <div class="wf-dot ok">↓</div>
+      <h3>Step 4 — Return Decrypted File to User</h3>
+      <p>If all checks pass, the decrypted bytes are returned as a Blob with the original filename and MIME type, and offered for download. The private key and decrypted bytes are only in memory — they are cleared when the page is closed.</p>
+    </div>
+  </div>
+
+  <!-- SECURITY PROPERTIES -->
+  <div class="section-header">
+    <h2>🛡️ Security Properties</h2>
+  </div>
+
+  <div class="card">
+    <table class="algo-table">
+      <tr><th>Property</th><th>Mechanism</th><th>What It Prevents</th></tr>
+      <tr>
+        <td>Confidentiality</td>
+        <td>AES-GCM-256 encryption of file bytes</td>
+        <td>An eavesdropper who intercepts the bundle cannot read the file without the AES key, which is itself protected by RSA</td>
+      </tr>
+      <tr>
+        <td>Integrity (file)</td>
+        <td>SHA-512 hash embedded in bundle; verified on decryption</td>
+        <td>Detects any modification to the file bytes after encryption</td>
+      </tr>
+      <tr>
+        <td>Integrity (ciphertext)</td>
+        <td>AES-GCM 128-bit authentication tag</td>
+        <td>Detects any modification to the encrypted payload — decryption fails if tampered</td>
+      </tr>
+      <tr>
+        <td>Asymmetric Key Exchange</td>
+        <td>AES session key wrapped with RSA-OAEP-2048</td>
+        <td>Sender and receiver don't need to share a secret in advance. Only the RSA private key can recover the AES key</td>
+      </tr>
+      <tr>
+        <td>Semantic Security</td>
+        <td>Fresh random AES key + IV per encryption</td>
+        <td>Identical files produce different ciphertext every time — prevents pattern analysis</td>
+      </tr>
+      <tr>
+        <td>Zero-Trust</td>
+        <td>All crypto runs in browser (Web Crypto API)</td>
+        <td>No keys, passwords, or file data are transmitted to any server</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- QUICK STEPS -->
+  <div class="section-header">
+    <h2>⚡ Quick Start — Using the System</h2>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">// Recipient Setup (one-time)</div>
+      <div class="step-guide">
+        <div class="step-item"><div class="step-num-badge">1</div><div class="step-content"><h4>Open keygen.html</h4><p>Click "Generate RSA-2048 Key Pair". This takes about 1 second.</p></div></div>
+        <div class="step-item"><div class="step-num-badge">2</div><div class="step-content"><h4>Share Public Key</h4><p>Copy or download your <span style="color:var(--teal)">public key PEM</span>. Send it to anyone who will send you files.</p></div></div>
+        <div class="step-item"><div class="step-num-badge">3</div><div class="step-content"><h4>Save Private Key</h4><p>Download your <span style="color:var(--red)">private key PEM</span>. Keep it safe — you'll paste it on receive.html to decrypt files.</p></div></div>
+      </div>
+      <a href="keygen.html" class="btn btn-secondary btn-sm" style="margin-top:14px;">Open Key Gen →</a>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// Sender Workflow</div>
+      <div class="step-guide">
+        <div class="step-item"><div class="step-num-badge">1</div><div class="step-content"><h4>Open send.html</h4><p>Drop or browse for the file you want to share securely.</p></div></div>
+        <div class="step-item"><div class="step-num-badge">2</div><div class="step-content"><h4>Paste Recipient's Public Key</h4><p>Paste the PEM public key the recipient shared with you.</p></div></div>
+        <div class="step-item"><div class="step-num-badge">3</div><div class="step-content"><h4>Click Encrypt</h4><p>Download the bundle JSON. Send it to the recipient over any channel — email, chat, USB drive, etc.</p></div></div>
+      </div>
+      <a href="send.html" class="btn btn-primary btn-sm" style="margin-top:14px;">Open Send →</a>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// Recipient Decryption</div>
+      <div class="step-guide">
+        <div class="step-item"><div class="step-num-badge">1</div><div class="step-content"><h4>Open receive.html</h4><p>Drop the bundle JSON file or paste its contents.</p></div></div>
+        <div class="step-item"><div class="step-num-badge">2</div><div class="step-content"><h4>Paste Private Key</h4><p>Paste your RSA private key PEM. It is never sent anywhere.</p></div></div>
+        <div class="step-item"><div class="step-num-badge">3</div><div class="step-content"><h4>Click Decrypt</h4><p>The file is decrypted and the SHA-512 integrity is verified. Download the original file.</p></div></div>
+      </div>
+      <a href="receive.html" class="btn btn-teal btn-sm" style="margin-top:14px;">Open Receive →</a>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// Standalone Integrity Check</div>
+      <div class="step-guide">
+        <div class="step-item"><div class="step-num-badge">1</div><div class="step-content"><h4>Open verify.html</h4><p>Drop any file to compute its SHA-256, SHA-384, and SHA-512 hashes simultaneously.</p></div></div>
+        <div class="step-item"><div class="step-num-badge">2</div><div class="step-content"><h4>Compare Against Known Hash</h4><p>Paste an expected hash and click Compare to verify authenticity.</p></div></div>
+        <div class="step-item"><div class="step-num-badge">3</div><div class="step-content"><h4>Avalanche Demo</h4><p>Use the text hash demo to observe how one character change alters ~50% of the SHA-512 output.</p></div></div>
+      </div>
+      <a href="verify.html" class="btn btn-secondary btn-sm" style="margin-top:14px;">Open Verifier →</a>
+    </div>
+  </div>
+
+  <div style="margin-top:48px; text-align:center; font-family:var(--font-mono); font-size:0.72rem; color:var(--text-muted);">
+    Secure File Sharing System · SHA-512 + AES-GCM-256 + RSA-OAEP-2048 · Web Crypto API · All crypto in-browser
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Send File — SFS</title>
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .pipeline {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 0; margin: 20px 0; background: var(--bg-input);
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 12px 16px; overflow: hidden;
+    }
+    .pipe-step {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--font-mono); font-size: 0.72rem;
+      padding: 4px 0;
+    }
+    .pipe-step .ps-num {
+      width: 20px; height: 20px;
+      background: var(--bg-panel); border: 1px solid var(--border);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; color: var(--text-muted); flex-shrink: 0;
+    }
+    .pipe-step .ps-num.done  { background: var(--green-dim);  border-color: var(--green);  color: var(--green); }
+    .pipe-step .ps-num.active{ background: rgba(240,165,0,0.15); border-color: var(--amber); color: var(--amber); }
+    .pipe-step .ps-label { color: var(--text-muted); }
+    .pipe-step .ps-label.active { color: var(--amber); }
+    .pipe-step .ps-label.done   { color: var(--green); }
+    .pipe-arrow { color: var(--border-hi); margin: 0 8px; font-size: 0.8rem; }
+
+    .bundle-output {
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 14px;
+      font-family: var(--font-mono); font-size: 0.72rem; color: var(--teal);
+      max-height: 200px; overflow-y: auto; line-height: 1.7;
+      word-break: break-all; white-space: pre-wrap;
+    }
+    .file-info-card {
+      background: var(--bg-input); border: 1px solid var(--teal-dim);
+      border-radius: var(--radius-md); padding: 14px;
+      display: none;
+    }
+    .fi-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
+    .fi-row:last-child { border-bottom: none; }
+    .fi-label { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.72rem; }
+    .fi-val   { color: var(--text-primary); font-family: var(--font-mono); font-size: 0.72rem; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-brand"><span class="lock-icon">🔐</span> SFS</a>
+    <div class="nav-links">
+      <a href="index.html"    class="nav-link">Dashboard</a>
+      <a href="keygen.html"   class="nav-link">Key Gen</a>
+      <a href="send.html"     class="nav-link active">Send File</a>
+      <a href="receive.html"  class="nav-link">Receive</a>
+      <a href="verify.html"   class="nav-link">Verify</a>
+      <a href="workflow.html" class="nav-link">Workflow</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container page-wrap">
+  <div class="page-header">
+    <div class="step-label">Step 02 — Sender</div>
+    <h1>📤 Encrypt &amp; Send File</h1>
+    <p>Select a file and paste the recipient's RSA public key. The system will hash, encrypt, and wrap it into a single secure bundle you can safely share over any channel.</p>
+  </div>
+
+  <!-- Encryption Pipeline Indicator -->
+  <div class="pipeline" id="pipeline">
+    <div class="pipe-step">
+      <div class="ps-num" id="ps1">1</div>
+      <span class="ps-label" id="pl1">Select File</span>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="ps-num" id="ps2">2</div>
+      <span class="ps-label" id="pl2">SHA-512 Hash</span>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="ps-num" id="ps3">3</div>
+      <span class="ps-label" id="pl3">AES-GCM-256 Encrypt</span>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="ps-num" id="ps4">4</div>
+      <span class="ps-label" id="pl4">RSA Wrap Key</span>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="ps-num" id="ps5">5</div>
+      <span class="ps-label" id="pl5">Bundle Ready</span>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Left: Inputs -->
+    <div>
+      <div class="card">
+        <div class="card-title">// 1. Select File</div>
+
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" id="file-input" onchange="fileSelected(this.files[0])">
+          <div class="drop-icon">📄</div>
+          <div class="drop-label">Drop file here or click to browse</div>
+          <div class="drop-sub">Any file type · Processed entirely in browser</div>
+        </div>
+
+        <div class="file-info-card" id="file-info">
+          <div class="fi-row"><span class="fi-label">Name</span><span class="fi-val" id="fi-name">—</span></div>
+          <div class="fi-row"><span class="fi-label">Size</span><span class="fi-val" id="fi-size">—</span></div>
+          <div class="fi-row"><span class="fi-label">Type</span><span class="fi-val" id="fi-type">—</span></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">// 2. Recipient's RSA Public Key</div>
+        <label class="field-label">Paste PEM public key</label>
+        <textarea id="pub-key-input" placeholder="-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+-----END PUBLIC KEY-----" style="min-height:140px; font-size:0.72rem;"></textarea>
+        <p style="margin-top:8px; font-size:0.75rem;">Ask the recipient to generate their key pair on the <a href="keygen.html" style="color:var(--amber);">Key Gen page</a> and share their public key with you.</p>
+      </div>
+    </div>
+
+    <!-- Right: Process + Output -->
+    <div>
+      <div class="card">
+        <div class="card-title">// 3. Encrypt &amp; Create Bundle</div>
+
+        <div class="step-guide">
+          <div class="step-item">
+            <div class="step-num-badge">①</div>
+            <div class="step-content">
+              <h4>SHA-512 Hash</h4>
+              <p>Compute a 512-bit fingerprint of the original file bytes. Stored inside the bundle to verify integrity on decryption.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">②</div>
+            <div class="step-content">
+              <h4>AES-GCM-256 Encrypt</h4>
+              <p>A fresh random 256-bit AES key and 96-bit IV are generated. The file is encrypted with an appended 128-bit authentication tag.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">③</div>
+            <div class="step-content">
+              <h4>RSA-OAEP Wrap Key</h4>
+              <p>The AES session key (32 bytes) is encrypted with the recipient's RSA-2048 public key. The plaintext AES key is never included in the bundle.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="encrypt-btn" onclick="encryptFile()" disabled>
+            <span id="enc-spinner" style="display:none;" class="spinner"></span>
+            🔐 Encrypt File
+          </button>
+          <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
+        </div>
+        <div id="enc-status"></div>
+      </div>
+
+      <!-- Hash output (shown after encrypt) -->
+      <div class="card" id="hash-card" style="display:none; margin-top:16px;">
+        <div class="card-title">// SHA-512 Digest (Original File)</div>
+        <div class="hash-output" id="sha-out">—</div>
+        <div class="stat-row">
+          <div class="stat-chip"><span class="stat-label">Algorithm</span><span class="stat-val">SHA-512</span></div>
+          <div class="stat-chip"><span class="stat-label">Bits</span><span class="stat-val">512</span></div>
+          <div class="stat-chip"><span class="stat-label">Hex chars</span><span class="stat-val">128</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bundle Output -->
+  <div class="card" id="bundle-card" style="display:none; margin-top:16px;">
+    <div class="card-title">// Secure Bundle — Ready to Send</div>
+    <p style="margin-bottom:12px;">This JSON bundle is safe to share over email, messaging apps, or any channel. It contains the encrypted file, wrapped AES key, IV, salt, and SHA-512 hash. Without the recipient's private key, it is unreadable.</p>
+
+    <div class="bundle-output" id="bundle-out">—</div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="downloadBundle()">⬇ Download Bundle (.json)</button>
+      <button class="btn btn-secondary" onclick="copyBundle()">Copy JSON</button>
+    </div>
+
+    <div class="stat-row" id="bundle-stats"></div>
+  </div>
+
+  <div style="margin-top:24px; text-align:right;">
+    <a href="receive.html" class="btn btn-teal">Next: Decrypt File →</a>
+  </div>
+</div>
+
+<script src="crypto-engine.js"></script>
+<script>
+  let selectedFile = null;
+  let bundleData   = null;
+
+  // Drag-and-drop
+  const dz = document.getElementById('drop-zone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) fileSelected(f);
+  });
+
+  function fileSelected(file) {
+    selectedFile = file;
+    dz.classList.add('has-file');
+    dz.querySelector('.drop-icon').textContent = '✅';
+    dz.querySelector('.drop-label').textContent = file.name;
+    dz.querySelector('.drop-sub').textContent = formatSize(file.size) + ' · ' + (file.type || 'unknown type');
+
+    document.getElementById('fi-name').textContent = file.name;
+    document.getElementById('fi-size').textContent = formatSize(file.size);
+    document.getElementById('fi-type').textContent = file.type || 'application/octet-stream';
+    document.getElementById('file-info').style.display = 'block';
+    document.getElementById('encrypt-btn').disabled = false;
+    setPipeStep(1, 'done');
+  }
+
+  async function encryptFile() {
+    const pubKeyPem = document.getElementById('pub-key-input').value.trim();
+    if (!selectedFile) { setStatus('enc-status', '✗ Please select a file first.', 'error'); return; }
+    if (!pubKeyPem)    { setStatus('enc-status', '✗ Please paste the recipient\'s public key.', 'error'); return; }
+
+    const btn = document.getElementById('encrypt-btn');
+    document.getElementById('enc-spinner').style.display = 'inline-block';
+    btn.disabled = true;
+
+    try {
+      setPipeStep(2, 'active');
+      setStatus('enc-status', '⏳ Step 1/3 — Computing SHA-512 hash…', 'info');
+      await delay(100);
+
+      setPipeStep(2, 'done'); setPipeStep(3, 'active');
+      setStatus('enc-status', '⏳ Step 2/3 — Encrypting file with AES-GCM-256…', 'info');
+      await delay(100);
+
+      setPipeStep(3, 'done'); setPipeStep(4, 'active');
+      setStatus('enc-status', '⏳ Step 3/3 — Wrapping AES key with RSA-OAEP…', 'info');
+
+      const result = await CryptoEngine.createSecureBundle(selectedFile, pubKeyPem);
+      bundleData = result.bundle;
+
+      setPipeStep(4, 'done'); setPipeStep(5, 'done');
+
+      // Show SHA-512
+      document.getElementById('sha-out').textContent = result.sha512hex;
+      document.getElementById('hash-card').style.display = 'block';
+
+      // Show bundle
+      document.getElementById('bundle-out').textContent = result.bundleJSON;
+      document.getElementById('bundle-card').style.display = 'block';
+
+      // Stats
+      const bundleSize = new Blob([result.bundleJSON]).size;
+      document.getElementById('bundle-stats').innerHTML = `
+        <div class="stat-chip"><span class="stat-label">File</span><span class="stat-val">${result.fileName}</span></div>
+        <div class="stat-chip"><span class="stat-label">Original Size</span><span class="stat-val">${formatSize(result.fileSize)}</span></div>
+        <div class="stat-chip"><span class="stat-label">Bundle Size</span><span class="stat-val">${formatSize(bundleSize)}</span></div>
+        <div class="stat-chip"><span class="stat-label">Encryption</span><span class="stat-val">AES-GCM-256</span></div>
+        <div class="stat-chip"><span class="stat-label">Key Wrap</span><span class="stat-val">RSA-OAEP-2048</span></div>
+      `;
+
+      setStatus('enc-status', '✓ File encrypted and bundle created! Share the JSON bundle with the recipient.', 'success');
+    } catch(e) {
+      setPipeStep(2, ''); setPipeStep(3, ''); setPipeStep(4, ''); setPipeStep(5, '');
+      setStatus('enc-status', '✗ Error: ' + e.message + ' — Ensure the public key is valid RSA PEM format.', 'error');
+    } finally {
+      document.getElementById('enc-spinner').style.display = 'none';
+      btn.disabled = false;
+    }
+  }
+
+  function downloadBundle() {
+    if (!bundleData) return;
+    const json = JSON.stringify(bundleData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'secure_bundle_' + (bundleData.fileName || 'file').replace(/[^a-z0-9]/gi,'_') + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function copyBundle() {
+    if (!bundleData) return;
+    navigator.clipboard.writeText(JSON.stringify(bundleData, null, 2));
+    setStatus('enc-status', '✓ Bundle JSON copied to clipboard', 'success');
+  }
+
+  function resetForm() {
+    selectedFile = null; bundleData = null;
+    document.getElementById('file-input').value = '';
+    document.getElementById('pub-key-input').value = '';
+    dz.classList.remove('has-file', 'drag-over');
+    dz.querySelector('.drop-icon').textContent = '📄';
+    dz.querySelector('.drop-label').textContent = 'Drop file here or click to browse';
+    dz.querySelector('.drop-sub').textContent = 'Any file type · Processed entirely in browser';
+    document.getElementById('file-info').style.display = 'none';
+    document.getElementById('hash-card').style.display = 'none';
+    document.getElementById('bundle-card').style.display = 'none';
+    document.getElementById('encrypt-btn').disabled = true;
+    ['enc-status'].forEach(id => document.getElementById(id).innerHTML = '');
+    [1,2,3,4,5].forEach(i => setPipeStep(i, ''));
+  }
+
+  function setPipeStep(n, state) {
+    const numEl = document.getElementById('ps'+n);
+    const lblEl = document.getElementById('pl'+n);
+    numEl.className = 'ps-num' + (state ? ' '+state : '');
+    lblEl.className = 'ps-label' + (state ? ' '+state : '');
+    if (state === 'done') numEl.textContent = '✓';
+    else numEl.textContent = n;
+  }
+
+  function setStatus(id, msg, type) {
+    const map = { success:'alert-success', error:'alert-error', info:'alert-info', warn:'alert-warn' };
+    document.getElementById(id).innerHTML = `<div class="alert ${map[type]||'alert-info'}">${msg}</div>`;
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(2) + ' MB';
+  }
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

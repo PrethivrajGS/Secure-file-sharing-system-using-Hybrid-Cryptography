@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrity Verifier — SFS</title>
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .av-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 12px; }
+    .av-item { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; }
+    .av-input { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; }
+    .av-hash  { font-family: var(--font-mono); font-size: 0.65rem; word-break: break-all; line-height: 1.7; }
+    .av-hash.same { color: var(--teal); }
+    .av-hash.diff { color: var(--red); }
+
+    .diff-count { font-family: var(--font-mono); font-size: 0.8rem; margin-top: 12px; padding: 10px 14px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md); }
+
+    .hash-meter {
+      height: 6px; background: var(--border); border-radius: 3px;
+      overflow: hidden; margin-top: 8px;
+    }
+    .hash-meter-fill { height: 100%; border-radius: 3px; background: var(--amber); transition: width 0.4s; }
+
+    .multi-hash-output { margin-top: 8px; }
+    .mho-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .mho-row:last-child { border-bottom: none; }
+    .mho-algo { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); width: 70px; flex-shrink: 0; }
+    .mho-hash { font-family: var(--font-mono); font-size: 0.68rem; color: var(--teal); word-break: break-all; flex: 1; }
+    .mho-bits { font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-muted); width: 50px; text-align: right; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-brand"><span class="lock-icon">🔐</span> SFS</a>
+    <div class="nav-links">
+      <a href="index.html"    class="nav-link">Dashboard</a>
+      <a href="keygen.html"   class="nav-link">Key Gen</a>
+      <a href="send.html"     class="nav-link">Send File</a>
+      <a href="receive.html"  class="nav-link">Receive</a>
+      <a href="verify.html"   class="nav-link active">Verify</a>
+      <a href="workflow.html" class="nav-link">Workflow</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container page-wrap">
+  <div class="page-header">
+    <div class="step-label">Step 04 — Integrity</div>
+    <h1>✅ SHA-512 File Integrity Verifier</h1>
+    <p>Independently compute and verify SHA-512 hashes. Useful for verifying file authenticity before encryption, after downloading, or checking against a known digest.</p>
+  </div>
+
+  <div class="grid-2">
+
+    <!-- Left: File Hash -->
+    <div>
+      <div class="card">
+        <div class="card-title">// Compute File Hash</div>
+
+        <div class="drop-zone" id="hash-drop-zone">
+          <input type="file" id="hash-file-input" onchange="computeFileHash(this.files[0])">
+          <div class="drop-icon" id="hdz-icon">🔍</div>
+          <div class="drop-label" id="hdz-label">Drop any file to hash it</div>
+          <div class="drop-sub" id="hdz-sub">SHA-256 · SHA-384 · SHA-512 computed simultaneously</div>
+        </div>
+        <div id="hash-spinner-wrap" style="display:none; text-align:center; padding:16px; font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">
+          <span class="spinner"></span> Computing hash…
+        </div>
+
+        <div class="multi-hash-output" id="multi-hash-out" style="display:none;">
+          <div class="mho-row">
+            <span class="mho-algo">SHA-256</span>
+            <span class="mho-hash" id="h256">—</span>
+            <span class="mho-bits">256-bit</span>
+          </div>
+          <div class="mho-row">
+            <span class="mho-algo">SHA-384</span>
+            <span class="mho-hash" id="h384">—</span>
+            <span class="mho-bits">384-bit</span>
+          </div>
+          <div class="mho-row">
+            <span class="mho-algo" style="color:var(--amber);">SHA-512 ★</span>
+            <span class="mho-hash" id="h512" style="color:var(--amber);">—</span>
+            <span class="mho-bits">512-bit</span>
+          </div>
+        </div>
+
+        <div class="stat-row" id="file-stats" style="display:none;"></div>
+
+        <div id="copy-row" style="display:none; margin-top:10px;">
+          <button class="btn btn-secondary btn-sm" onclick="copyHash('h512')">Copy SHA-512</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyHash('h256')">Copy SHA-256</button>
+        </div>
+      </div>
+
+      <!-- Verify against known hash -->
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">// Verify Against Known Hash</div>
+        <label class="field-label">Expected SHA-512 hash (hex)</label>
+        <textarea id="expected-hash" placeholder="Paste the expected SHA-512 hash here (128 hex characters)…" style="min-height:70px;"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="verifyAgainstKnown()">Compare</button>
+          <button class="btn btn-secondary btn-sm" onclick="pasteFromComputed()">Use computed hash</button>
+        </div>
+        <div id="verify-status"></div>
+      </div>
+    </div>
+
+    <!-- Right: Avalanche Effect Demo -->
+    <div>
+      <div class="card">
+        <div class="card-title">// Avalanche Effect — Text Hash Demo</div>
+        <p style="margin-bottom:14px; font-size:0.8rem;">Type in both fields. Notice how even a single character change causes ~50% of the SHA-512 hash to change — this is the avalanche effect that makes hashes secure.</p>
+
+        <label class="field-label">Input A</label>
+        <input type="text" id="av-a" value="Hello, World!" oninput="avalancheDemo()">
+
+        <label class="field-label">Input B (try changing one character)</label>
+        <input type="text" id="av-b" value="Hello, World." oninput="avalancheDemo()">
+
+        <div class="av-grid" id="av-output">
+          <div class="av-item">
+            <div class="av-input" id="av-a-label">Input A</div>
+            <div class="av-hash same" id="av-a-hash">computing…</div>
+          </div>
+          <div class="av-item">
+            <div class="av-input" id="av-b-label">Input B</div>
+            <div class="av-hash diff" id="av-b-hash">computing…</div>
+          </div>
+        </div>
+
+        <div class="diff-count" id="diff-count">—</div>
+
+        <div class="progress-wrap" id="av-progress" style="display:none;">
+          <div class="progress-label">
+            <span>Hash difference</span>
+            <span id="diff-pct">—</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="diff-bar"></div></div>
+          <p style="font-size:0.72rem; margin-top:6px; color:var(--text-muted);">Ideal avalanche = ~50%. This means a 1-bit change in input flips ~50% of the output.</p>
+        </div>
+      </div>
+
+      <!-- Algorithm comparison -->
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">// Why SHA-512 for File Sharing?</div>
+        <div class="step-guide">
+          <div class="step-item">
+            <div class="step-num-badge" style="background:rgba(240,165,0,0.15); border-color:var(--amber-dim); color:var(--amber);">★</div>
+            <div class="step-content">
+              <h4>SHA-512 — 512 bits</h4>
+              <p>2^512 possible outputs. Collision resistance: no known attacks. Best for sensitive file integrity. Used in this system.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge">—</div>
+            <div class="step-content">
+              <h4>SHA-256 — 256 bits</h4>
+              <p>2^256 possible outputs. Widely used, still secure. Used internally for AES key derivation in this system.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num-badge" style="color:var(--red); border-color:var(--red-dim);">✗</div>
+            <div class="step-content">
+              <h4>MD5 / SHA-1 — Deprecated</h4>
+              <p>Collision attacks are known. Never use these for security-sensitive file verification.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="crypto-engine.js"></script>
+<script>
+  let computedHash = null;
+
+  // Drag-and-drop for hash zone
+  const hdz = document.getElementById('hash-drop-zone');
+  hdz.addEventListener('dragover', e => { e.preventDefault(); hdz.classList.add('drag-over'); });
+  hdz.addEventListener('dragleave', () => hdz.classList.remove('drag-over'));
+  hdz.addEventListener('drop', e => {
+    e.preventDefault(); hdz.classList.remove('drag-over');
+    computeFileHash(e.dataTransfer.files[0]);
+  });
+
+  async function computeFileHash(file) {
+    if (!file) return;
+    document.getElementById('hash-spinner-wrap').style.display = 'block';
+    document.getElementById('multi-hash-out').style.display = 'none';
+    document.getElementById('copy-row').style.display = 'none';
+    document.getElementById('file-stats').style.display = 'none';
+
+    hdz.classList.add('has-file');
+    document.getElementById('hdz-icon').textContent = '⏳';
+    document.getElementById('hdz-label').textContent = file.name;
+    document.getElementById('hdz-sub').textContent = 'Hashing…';
+
+    try {
+      const buf = await file.arrayBuffer();
+      const [h256, h384, h512] = await Promise.all([
+        crypto.subtle.digest('SHA-256', buf),
+        crypto.subtle.digest('SHA-384', buf),
+        crypto.subtle.digest('SHA-512', buf)
+      ]);
+
+      const hex = b => Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');
+
+      computedHash = hex(h512);
+      document.getElementById('h256').textContent = hex(h256);
+      document.getElementById('h384').textContent = hex(h384);
+      document.getElementById('h512').textContent = hex(h512);
+      document.getElementById('multi-hash-out').style.display = 'block';
+      document.getElementById('copy-row').style.display = 'flex';
+
+      document.getElementById('file-stats').style.display = 'flex';
+      document.getElementById('file-stats').innerHTML = `
+        <div class="stat-chip"><span class="stat-label">File</span><span class="stat-val">${file.name}</span></div>
+        <div class="stat-chip"><span class="stat-label">Size</span><span class="stat-val">${formatSize(file.size)}</span></div>
+        <div class="stat-chip"><span class="stat-label">Type</span><span class="stat-val">${file.type||'unknown'}</span></div>
+      `;
+
+      document.getElementById('hdz-icon').textContent = '✅';
+      document.getElementById('hdz-sub').textContent = 'Hash computed · ' + formatSize(file.size);
+    } catch(e) {
+      setStatus('verify-status', '✗ Error: ' + e.message, 'error');
+    } finally {
+      document.getElementById('hash-spinner-wrap').style.display = 'none';
+    }
+  }
+
+  function verifyAgainstKnown() {
+    const expected = document.getElementById('expected-hash').value.trim().toLowerCase();
+    if (!computedHash) { setStatus('verify-status', '✗ Drop a file first to compute its hash.', 'error'); return; }
+    if (!expected)      { setStatus('verify-status', '✗ Enter the expected hash.', 'error'); return; }
+    if (expected.length !== 128) { setStatus('verify-status', `✗ SHA-512 should be 128 hex characters. Got ${expected.length}.`, 'error'); return; }
+
+    if (computedHash === expected) {
+      setStatus('verify-status', '✅ MATCH — File integrity verified. The file is authentic and unmodified.', 'success');
+    } else {
+      setStatus('verify-status', '❌ MISMATCH — Hashes differ. File may have been corrupted or tampered with.', 'error');
+    }
+  }
+
+  function pasteFromComputed() {
+    if (computedHash) document.getElementById('expected-hash').value = computedHash;
+  }
+
+  function copyHash(id) {
+    const text = document.getElementById(id).textContent;
+    if (text && text !== '—') navigator.clipboard.writeText(text);
+  }
+
+  // ── Avalanche Effect ──
+  let avTimer = null;
+  function avalancheDemo() {
+    clearTimeout(avTimer);
+    avTimer = setTimeout(runAvalanche, 80);
+  }
+
+  async function runAvalanche() {
+    const a = document.getElementById('av-a').value;
+    const b = document.getElementById('av-b').value;
+    document.getElementById('av-a-label').textContent = '"' + a.substring(0,20) + (a.length>20?'…':'"');
+    document.getElementById('av-b-label').textContent = '"' + b.substring(0,20) + (b.length>20?'…':'"');
+
+    const enc = s => new TextEncoder().encode(s);
+    const hex = b => Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');
+
+    const [ha, hb] = await Promise.all([
+      crypto.subtle.digest('SHA-512', enc(a)).then(hex),
+      crypto.subtle.digest('SHA-512', enc(b)).then(hex)
+    ]);
+
+    document.getElementById('av-a-hash').textContent = ha;
+    document.getElementById('av-b-hash').textContent = hb;
+
+    if (ha === hb) {
+      document.getElementById('av-a-hash').className = 'av-hash same';
+      document.getElementById('av-b-hash').className = 'av-hash same';
+      document.getElementById('diff-count').textContent = '✓ Inputs are identical — hashes are identical';
+      document.getElementById('av-progress').style.display = 'none';
+    } else {
+      document.getElementById('av-a-hash').className = 'av-hash same';
+      document.getElementById('av-b-hash').className = 'av-hash diff';
+
+      let diff = 0;
+      for (let i = 0; i < ha.length; i++) if (ha[i] !== hb[i]) diff++;
+      const pct = (diff / ha.length * 100).toFixed(1);
+
+      document.getElementById('diff-count').textContent = `${diff} / ${ha.length} hex characters differ (${pct}% of hash changed)`;
+      document.getElementById('av-progress').style.display = 'block';
+      document.getElementById('diff-pct').textContent = pct + '%';
+      document.getElementById('diff-bar').style.width = Math.min(pct, 100) + '%';
+    }
+  }
+
+  function setStatus(id, msg, type) {
+    const map = { success:'alert-success', error:'alert-error', info:'alert-info', warn:'alert-warn' };
+    document.getElementById(id).innerHTML = `<div class="alert ${map[type]||'alert-info'}">${msg}</div>`;
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(2) + ' MB';
+  }
+
+  // Run on load
+  runAvalanche();
+</script>
+</body>
+</html>
